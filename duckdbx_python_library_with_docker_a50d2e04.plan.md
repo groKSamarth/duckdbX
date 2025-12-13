@@ -12,7 +12,7 @@ todos:
     content: Create Docker container management class for spinning up, monitoring, and tearing down DuckDB containers
     status: pending
   - id: implement-connection
-    content: Build Databricks Unity Catalog and Delta Sharing connection logic with credential management
+    content: Build connection logic supporting both Databricks-managed and standalone Delta Sharing server with credential management and auto-detection
     status: pending
   - id: implement-core-class
     content: Create main DuckDBX class with context manager pattern (__enter__, __exit__) and manual lifecycle methods (start, stop, is_running)
@@ -46,13 +46,19 @@ todos:
 
 duckdbX will be a Python library that manages ephemeral DuckDB Docker containers connected to Databricks via Unity Catalog and Delta Sharing. The library provides both manual lifecycle management and context manager patterns for easy usage.
 
+**Delta Sharing Support**: The library supports two modes:
+1. **Databricks-managed Delta Sharing** (requires paid Databricks account with Unity Catalog)
+2. **Standalone Delta Sharing server** (open-source, works with free Databricks or any Delta Lake source)
+
 ```mermaid
 graph TB
     User[Python Application] -->|import duckdbx| Library[duckdbx Library]
     Library -->|manages| Docker[Docker Container]
     Docker -->|runs| DuckDB[DuckDB Instance]
     DuckDB -->|connects via| DeltaSharing[Delta Sharing Protocol]
-    DeltaSharing -->|accesses| Databricks[Databricks Unity Catalog]
+    DeltaSharing -->|Option 1| Databricks[Databricks Unity Catalog<br/>Paid Account]
+    DeltaSharing -->|Option 2| StandaloneServer[Standalone Delta Sharing Server<br/>Open Source]
+    StandaloneServer -->|accesses| DeltaLake[Delta Lake Tables<br/>S3/ADLS/GCS]
     Library -->|reads| Config[Config File/Env Vars]
 ```
 
@@ -110,12 +116,15 @@ duckdbX/
 - Cleanup and teardown
 - Port management (find available ports)
 
-**`duckdbx/connection.py`**: Databricks integration
+**`duckdbx/connection.py`**: Databricks/Delta Sharing integration
 
-- Unity Catalog connection setup
+- Support for two connection modes:
+  - **Databricks-managed**: Unity Catalog connection setup with Delta Sharing
+  - **Standalone**: Connect to open-source Delta Sharing server endpoint
 - Delta Sharing protocol configuration
-- Credential management (token, OAuth)
+- Credential management (token, OAuth, profile files)
 - Connection string generation for DuckDB
+- Automatic detection of connection mode based on configuration
 
 **`duckdbx/config.py`**: Configuration management
 
@@ -158,10 +167,19 @@ Support multiple configuration methods with priority:
 
 Configuration fields:
 
+**For Databricks-managed Delta Sharing:**
 - `databricks_host`: Databricks workspace URL
 - `databricks_token`: Personal access token or OAuth token
 - `unity_catalog_name`: Unity Catalog name
-- `delta_sharing_profile_path`: Path to Delta Sharing profile
+- `delta_sharing_profile_path`: Path to Delta Sharing profile file
+
+**For Standalone Delta Sharing Server:**
+- `delta_sharing_server_url`: URL of standalone Delta Sharing server
+- `delta_sharing_profile_path`: Path to Delta Sharing profile file (contains server endpoint and credentials)
+- `delta_sharing_bearer_token`: Bearer token for authentication (if not in profile)
+
+**Common settings:**
+- `connection_mode`: "databricks" or "standalone" (auto-detected if not specified)
 - `container_image`: Custom DuckDB image (optional)
 - `container_name`: Container name prefix
 - `timeout`: Connection timeout
@@ -214,12 +232,31 @@ Configuration fields:
 - Example scripts demonstrating usage patterns
 - Test both manual and context manager patterns
 
-### 7. Documentation
+### 7. Standalone Delta Sharing Server Setup
+
+Since Databricks Free Edition doesn't support Delta Sharing, users can set up an open-source Delta Sharing server:
+
+**Option A: Use existing Delta Sharing server**
+- Configure `delta_sharing_server_url` and provide profile file
+- Profile file contains endpoint URL and authentication credentials
+
+**Option B: Deploy standalone server** (future enhancement)
+- Could include helper scripts or Docker compose for deploying a Delta Sharing server
+- Server would expose Delta tables from S3/ADLS/GCS via Delta Sharing protocol
+- This allows sharing Delta tables without Databricks Unity Catalog
+
+**Implementation Notes:**
+- DuckDB's Delta Sharing extension can connect to any Delta Sharing-compatible server
+- Profile file format is standardized (JSON with endpoint, bearer token, etc.)
+- Library should validate profile file and connection mode
+
+### 8. Documentation
 
 - README with quick start guide
 - API documentation
 - Examples for common use cases
-- Configuration guide
+- Configuration guide for both connection modes
+- Guide for setting up standalone Delta Sharing server (if needed)
 - Troubleshooting section
 
 ## Implementation Todos
@@ -227,12 +264,12 @@ Configuration fields:
 1. **setup-package-structure**: Create package structure with `duckdbx/` directory and core modules
 2. **implement-config**: Build configuration management supporting file/env/params with priority system
 3. **implement-container-manager**: Create Docker container management class for spinning up DuckDB containers
-4. **implement-connection**: Build Databricks Unity Catalog and Delta Sharing connection logic
+4. **implement-connection**: Build connection logic supporting both Databricks-managed Delta Sharing (Unity Catalog) and standalone open-source Delta Sharing server, with auto-detection based on configuration
 5. **implement-core-class**: Create main `DuckDBX` class with context manager and manual lifecycle methods
 6. **create-dockerfile**: Build Dockerfile for DuckDB container with Delta Sharing extensions
 7. **implement-query-interface**: Add query execution methods (`execute`, `query`) with result handling
 8. **add-exceptions**: Create custom exception hierarchy
 9. **setup-dependencies**: Configure `pyproject.toml` and `requirements.txt` with all dependencies
 10. **create-examples**: Write example scripts demonstrating usage patterns
-11. **update-readme**: Create comprehensive README with installation, usage, and configuration guide
+11. **update-readme**: Create comprehensive README with installation, usage, configuration guide for both Databricks-managed and standalone Delta Sharing modes
 12. **add-tests**: Create basic test suite for core functionality

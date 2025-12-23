@@ -1,0 +1,5 @@
+# DuckDBX library dependencies
+duckdb>=0.9.0
+docker>=6.0.0
+pyyaml>=6.0
+
